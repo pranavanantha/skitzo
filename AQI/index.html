@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pollution Data & AQI Prediction</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --primary: #2A2A2A;
+    --secondary: #4CAF50;
+    --accent: #FF6B6B;
+    --background: #0F172A;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background: var(--background);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+}
+
+h1 {
+    text-align: center;
+    font-size: 3rem;
+    background: linear-gradient(45deg, #4CAF50, #3B82F6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 2rem 0;
+    letter-spacing: -1px;
+}
+
+.main-container {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    padding: 1rem;
+    max-width: 1600px;
+    margin: 0 auto;
+    flex-wrap: wrap;
+}
+
+.map-container, .prediction-container {
+    flex: 1;
+    min-width: 400px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.map-container:hover, .prediction-container:hover {
+    transform: translateY(-5px);
+}
+
+#map {
+    height: 500px;
+    width: 100%;
+    border-radius: 15px;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.prediction-container h2 {
+    color: white;
+    margin-bottom: 1.5rem;
+    font-weight: 600;
+    font-size: 1.8rem;
+}
+
+form#predictForm {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+select, input {
+    width: 100%;
+    padding: 1rem;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+select:focus, input:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3);
+    background: rgba(255, 255, 255, 0.15);
+}
+
+button {
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #4CAF50 0%, #3B82F6 100%);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+button:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
+}
+
+.aqi-result {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    color: white;
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+
+.aqi-result b {
+    color: #4CAF50;
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .main-container {
+        flex-direction: column;
+        padding: 1rem;
+    }
+
+    .map-container, .prediction-container {
+        min-width: unset;
+        width: 100%;
+    }
+
+    h1 {
+        font-size: 2rem;
+        padding: 0 1rem;
+    }
+
+    #map {
+        height: 400px;
+    }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4CAF50;
+    border-radius: 4px;
+}
+    </style>
+</head>
+<body>
+    <h1>Pollution Data and AQI Prediction</h1>
+
+    <div class="main-container">
+        <!-- Pollution Map -->
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+
+        <!-- AQI Prediction -->
+        <div class="prediction-container">
+            <h2>Predict AQI</h2>
+            <form id="predictForm">
+                <label for="city">Select City:</label>
+                <select id="city" required>
+                    <option value="Delhi">Delhi</option>
+                    <option value="Mumbai">Mumbai</option>
+                    <option value="Kolkata">Kolkata</option>
+                    <option value="Chennai">Chennai</option>
+                </select>
+
+                <label for="date">Select Date:</label>
+                <input type="date" id="date" required>
+
+                <label for="time">Select Time:</label>
+                <input type="time" id="time" required>
+
+                <button type="submit">Get Prediction</button>
+            </form>
+
+            <div id="aqiData" class="aqi-result"></div>
+        </div>
+    </div>
+
+    <script>
+        const apiKey = "ada380f32489031fc4a65acb257f05c8";
+        const cities = {
+            "Delhi": { lat: 28.6139, lon: 77.2090 },
+            "Mumbai": { lat: 19.0760, lon: 72.8777 },
+            "Kolkata": { lat: 22.5726, lon: 88.3639 },
+            "Chennai": { lat: 13.0827, lon: 80.2707 }
+        };
+
+        const map = L.map('map').setView([20.5937, 78.9629], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        function getAQIColor(aqi) {
+            if (aqi === 1) return "green";
+            if (aqi === 2) return "yellow";
+            if (aqi === 3) return "orange";
+            if (aqi === 4) return "red";
+            if (aqi === 5) return "purple";
+            return "gray";
+        }
+
+        function updatePollutionData() {
+            Object.keys(cities).forEach(city => {
+                fetch(`http://api.openweathermap.org/data/2.5/air_pollution?lat=${cities[city].lat}&lon=${cities[city].lon}&appid=${apiKey}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.list.length > 0) {
+                            const pollution = data.list[0].components;
+                            const aqi = data.list[0].main.aqi;
+
+                            const marker = L.circleMarker([cities[city].lat, cities[city].lon], {
+                                radius: 8,
+                                color: getAQIColor(aqi),
+                                fillColor: getAQIColor(aqi),
+                                fillOpacity: 0.8
+                            }).addTo(map);
+
+                            marker.bindPopup(`
+                                <b>${city}</b><br>
+                                AQI: <strong>${aqi}</strong><br>
+                                PM2.5: ${pollution.pm2_5} µg/m³<br>
+                                PM10: ${pollution.pm10} µg/m³<br>
+                                NO2: ${pollution.no2} µg/m³<br>
+                                CO: ${pollution.co} µg/m³<br>
+                                O3: ${pollution.o3} µg/m³
+                            `);
+                        }
+                    })
+                    .catch(error => console.log("Error fetching AQI data:", error));
+            });
+        }
+
+        updatePollutionData();
+
+        document.getElementById("predictForm").addEventListener("submit", function (event) {
+            event.preventDefault();
+            
+            const city = document.getElementById("city").value;
+            const date = document.getElementById("date").value;
+            const time = document.getElementById("time").value;
+
+            fetch(`http://localhost:5000/predict?city=${city}&date=${date}&time=${time}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById("aqiData").innerHTML = `
+                        <b>Predicted AQI for ${city}:</b><br>
+                        PM2.5: ${data.pm25} µg/m³<br>
+                        CO: ${data.co} µg/m³<br>
+                        NO2: ${data.no2} µg/m³<br>
+                        PM10: ${data.pm10} µg/m³<br>
+                        SO2: ${data.so2} µg/m³
+                    `;
+                })
+                .catch(error => console.log("Error fetching prediction:", error));
+        });
+    </script>
+</body>
+</html>
